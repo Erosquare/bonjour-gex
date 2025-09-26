@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bonjour Gex</title>
+  <meta name="description" content="Une photo de Suzuki GSX par jour, à 10h (heure de Paris)." />
+  <style>
+    :root{
+      --suzuki-blue:#004190; /* corporate blue */
+      --suzuki-red:#E50012;  /* corporate red  */
+      --ink:#0a0a0a;
+      --bg:#f8fafc;
+      --card:#ffffff;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif;
+      background:linear-gradient(180deg,#ffffff 0%, #f0f4ff 100%);
+      color:var(--ink);
+    }
+    header{
+      display:flex; align-items:center; gap:16px; padding:24px 20px; border-bottom:4px solid var(--suzuki-blue);
+      background:linear-gradient(90deg, var(--suzuki-blue) 0%, #0c56c5 60%, #2b7bff 100%);
+      color:white;
+    }
+    header img.logo{height:40px; width:auto; filter:drop-shadow(0 1px 0 rgba(0,0,0,.15)); background:transparent}
+    header .title{display:flex; flex-direction:column}
+    header h1{margin:0; font-weight:800; letter-spacing:.3px}
+    header small{opacity:.95}
+
+    main{max-width:1100px; margin:24px auto; padding:0 20px 60px}
+
+    .card{
+      background:var(--card); border-radius:18px; box-shadow:0 12px 30px rgba(0,0,0,.08);
+      overflow:hidden; border:1px solid rgba(0,0,0,.06);
+    }
+    .bar{ height:8px; background:linear-gradient(90deg, var(--suzuki-red), var(--suzuki-blue)); }
+    .meta{display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:14px 18px; border-bottom:1px dashed rgba(0,0,0,.1)}
+    .badge{background:var(--suzuki-blue); color:white; padding:6px 10px; border-radius:999px; font-size:.88rem; font-weight:700}
+    .badge.red{background:var(--suzuki-red)}
+    .spacer{flex:1}
+    .time-note{font-size:.95rem; opacity:.8}
+
+    figure{margin:0;}
+    .photo-wrap{display:grid; place-items:center; background:#eef3ff; min-height:300px}
+    .photo-wrap img{max-width:100%; height:auto; display:block;}
+    .placeholder{display:grid; place-items:center; padding:40px; text-align:center; color:#334}
+
+    figcaption{padding:14px 18px; font-size:.95rem; background:#fff}
+    figcaption a{color:var(--suzuki-blue); text-decoration:none; border-bottom:1px solid rgba(0,65,144,.25)}
+    figcaption a:hover{border-bottom-color:var(--suzuki-blue)}
+
+    footer{max-width:1100px; margin:0 auto; padding:20px; color:#334; font-size:.95rem}
+    .hint{opacity:.8}
+    .error{color:#b00020; font-weight:600}
+
+    .brand{
+      display:flex; align-items:center; gap:10px; margin-left:auto; padding:4px 8px; background:rgba(255,255,255,.15);
+      border-radius:10px; border:1px solid rgba(255,255,255,.25)
+    }
+    .brand img{height:22px}
+  </style>
+</head>
+<body>
+  <header>
+    <!-- Logo Suzuki (PNG) chargé de manière résiliente via plusieurs sources -->
+    <img class="logo" id="suzukiLogo" alt="Logo Suzuki" referrerpolicy="no-referrer" />
+    <div class="title">
+      <h1>Bonjour Gex</h1>
+      <small>Une Suzuki GSX par jour, à 10:00 (Europe/Paris)</small>
+    </div>
+    <div class="brand" title="Couleurs Suzuki">
+      <span>GSX</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10"/></svg>
+    </div>
+  </header>
+
+  <main>
+    <div class="card" id="card">
+      <div class="bar"></div>
+      <div class="meta">
+        <span class="badge" id="badgeDay">Photo du jour</span>
+        <span class="badge red" id="badgeSeries">Série GSX</span>
+        <div class="spacer"></div>
+        <div class="time-note" id="timeNote">Chargement…</div>
+      </div>
+
+      <figure>
+        <div class="photo-wrap" id="photoWrap">
+          <img id="photo" alt="Suzuki GSX du jour" />
+        </div>
+        <figcaption id="caption">Recherche d'une Suzuki GSX sur Wikimedia Commons…</figcaption>
+      </figure>
+    </div>
+  </main>
+
+  <footer>
+    <p class="hint">
+      Les images sont chargées automatiquement depuis Wikimedia Commons (catégories publiques GSX/GSX‑R/GSX‑S). Rien n'est stocké ici. Si votre environnement bloque les requêtes sortantes, un message de repli s'affichera.
+    </p>
+  </footer>
+
+  <script>
+    // ====================
+    // Configuration simple
+    // ====================
+    const START_DATE_ISO = '2025-09-26'; // ⇦ à modifier si besoin (départ du compteur)
+    const DAILY_HOUR_PARIS = 10;         // 10h Europe/Paris
+
+    // Catégories Wikimedia Commons à utiliser (JSONP contournant CORS)
+    const CATEGORIES = [
+      'Category:Suzuki_GSX-R',
+      'Category:Suzuki_GSX-S',
+      'Category:Suzuki_GSX'
+    ];
+
+    // Sources possibles du logo (PNG). Le script essaiera dans cet ordre.
+    const LOGO_SOURCES = [
+      'https://moto.suzuki.fr/wp-content/uploads/2023/03/logo_suzuki.svg'
+    ];
+
+    // ====================
+    // Utilitaires date/tz
+    // ====================
+    function parisParts(date = new Date()){
+      const fmt = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Paris', year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', hour12:false
+      });
+      const parts = fmt.formatToParts(date);
+      const y = +parts.find(p=>p.type==='year').value;
+      const m = +parts.find(p=>p.type==='month').value;
+      const d = +parts.find(p=>p.type==='day').value;
+      const hh = +parts.find(p=>p.type==='hour').value;
+      return {y, m, d, hh};
+    }
+    function toISODate({y,m,d}){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
+    function daysSince(startISO, now = new Date()){
+      // calcule en se basant sur la date "Paris" (ignore l'heure sauf pour le seuil 10h)
+      let {y,m,d,hh} = parisParts(now);
+      if(hh < DAILY_HOUR_PARIS){
+        const dt = new Date(Date.UTC(y, m-1, d));
+        dt.setUTCDate(dt.getUTCDate() - 1);
+        const p = parisParts(dt);
+        y = p.y; m = p.m; d = p.d;
+      }
+      const todayOnly = Date.UTC(y, m-1, d);
+      const [sy,sm,sd] = startISO.split('-').map(Number);
+      const startOnly = Date.UTC(sy, sm-1, sd);
+      const diffDays = Math.floor((todayOnly - startOnly) / (1000*60*60*24));
+      return Math.max(0, diffDays);
+    }
+
+    // ====================
+    // JSONP helper (contourne CORS en sandbox)
+    // ====================
+    function jsonp(url){
+      return new Promise((resolve, reject)=>{
+        const cb = 'jsonp_cb_' + Math.random().toString(36).slice(2);
+        const cleanup = ()=>{ try{ delete window[cb]; }catch(_){} if(script && script.parentNode){ script.parentNode.removeChild(script);} clearTimeout(t); };
+        window[cb] = data => { cleanup(); resolve(data); };
+        const t = setTimeout(()=>{ cleanup(); reject(new Error('JSONP timeout')); }, 15000);
+        const sep = url.includes('?') ? '&' : '?';
+        const script = document.createElement('script');
+        script.src = url + sep + 'format=json&callback=' + cb;
+        script.onerror = ()=>{ cleanup(); reject(new Error('JSONP script error')); };
+        document.head.appendChild(script);
+      });
+    }
+
+    // ====================
+    // Wikimedia API helpers (via JSONP)
+    // ====================
+    async function fetchCommonsImagesForCategory(cat){
+      const params = new URLSearchParams({
+        action:'query',
+        generator:'categorymembers',
+        gcmtitle:cat,
+        gcmtype:'file',
+        gcmlimit:'200',
+        prop:'imageinfo',
+        iiprop:'url|mime|extmetadata',
+        iiurlwidth:'2000'
+      });
+      const url = 'https://commons.wikimedia.org/w/api.php?' + params.toString();
+      const data = await jsonp(url);
+      if(!data || !data.query || !data.query.pages) return [];
+      const pages = Object.values(data.query.pages);
+      const photos = pages.filter(p=>{
+        const ii = p.imageinfo && p.imageinfo[0];
+        if(!ii) return false;
+        const mime = (ii.mime||'').toLowerCase();
+        const badInTitle = /logo|icon|badge|symbol|vector/i.test(p.title||'');
+        return !badInTitle && (/jpe?g|png/.test(mime));
+      }).map(p=>{
+        const ii = p.imageinfo[0];
+        return {
+          title: p.title,
+          pageid: p.pageid,
+          pageUrl: `https://commons.wikimedia.org/wiki/${encodeURIComponent(p.title.replace(/^File:/,''))}`,
+          imageUrl: ii.thumburl || ii.url,
+          fullUrl: ii.url || ii.thumburl,
+          author: (ii.extmetadata && ii.extmetadata.Artist && ii.extmetadata.Artist.value) || '',
+          license: (ii.extmetadata && ii.extmetadata.LicenseShortName && ii.extmetadata.LicenseShortName.value) || ''
+        };
+      });
+      return photos;
+    }
+
+    function pickDeterministic(arr, index){
+      if(!arr || !arr.length) return null;
+      const i = ((index % arr.length) + arr.length) % arr.length; // modulo positif
+      return arr[i];
+    }
+
+    // Hash FNV-1a 32-bit pour une sélection déterministe stable
+    function fnv1a(str){
+      let h = 0x811c9dc5;
+      for(let i=0;i<str.length;i++){
+        h ^= str.charCodeAt(i);
+        h = (h + (h<<1) + (h<<4) + (h<<7) + (h<<8) + (h<<24)) >>> 0; // *16777619 mod 2^32
+      }
+      return h >>> 0;
+    }
+
+    // Sélection déterministe par "min-hash" sur le titre pour que l'ordre/la taille n'influent pas
+    function pickByDateMinHash(items, dateISO){
+      if(!items || !items.length) return null;
+      let best = null;
+      let bestH = 0xffffffff;
+      for(const it of items){
+        const key = `${dateISO}|${it.title||''}`;
+        const h = fnv1a(key);
+        if(h < bestH){ bestH = h; best = it; }
+      }
+      return best;
+    }
+
+    function setText(id, text){ const el = document.getElementById(id); if(el) el.textContent = text; }
+    function setHTML(id, html){ const el = document.getElementById(id); if(el) el.innerHTML = html; }
+
+    // Charge le logo en essayant plusieurs URLs PNG
+    function loadLogo(){
+      const img = document.getElementById('suzukiLogo');
+      let i = 0;
+      function tryNext(){
+        if(i >= LOGO_SOURCES.length){ return; }
+        img.onerror = ()=>{ i++; tryNext(); };
+        img.src = LOGO_SOURCES[i];
+      }
+      tryNext();
+    }
+
+    async function init(){
+      loadLogo();
+      try{
+        const nowP = parisParts();
+        setText('timeNote', `Paris ${String(nowP.hh).padStart(2,'0')}:00 · nouvelle photo à ${String(DAILY_HOUR_PARIS).padStart(2,'0')}:00`);
+        setText('badgeDay', `Photo du ${toISODate(nowP)}`);
+
+        // Récupère des images depuis plusieurs catégories Commons (via JSONP)
+        const lists = await Promise.all(CATEGORIES.map(fetchCommonsImagesForCategory));
+        // Concaténer et trier de manière STABLE pour tous les visiteurs
+        const images = lists.flat().sort((a,b)=>{
+          const ta = (a.title||'').toLowerCase();
+          const tb = (b.title||'').toLowerCase();
+          if(ta<tb) return -1; if(ta>tb) return 1; return (a.pageid||0)-(b.pageid||0);
+        });
+
+        if(!images.length){
+          setHTML('caption', '<span class="error">Aucune image GSX trouvée (ou environnement bloqué). Essayez depuis GitHub Pages / un navigateur standard.</span>');
+          document.getElementById('photo').remove();
+          const wrap = document.getElementById('photoWrap');
+          const div = document.createElement('div');
+          div.className = 'placeholder';
+          div.innerHTML = '<strong>Repli</strong><br/>Impossible de charger des images distantes ici.';
+          wrap.appendChild(div);
+          return;
+        }
+
+        const dayIndex = daysSince(START_DATE_ISO);
+        const todayParisISO = (()=>{ const p=parisParts(); return `${p.y}-${String(p.m).padStart(2,'0')}-${String(p.d).padStart(2,'0')}`; })();
+        // Choix déterministe basé sur min-hash (indépendant de l'ordre / presque indépendant des ajouts)
+        const choice = pickByDateMinHash(images, todayParisISO) || pickDeterministic(images, dayIndex);
+        if(!choice){ throw new Error('Pas de choix disponible'); }
+
+        const img = document.getElementById('photo');
+        // Basculer automatiquement sur l'URL pleine si la miniature échoue
+        img.onerror = ()=>{
+          if(img.src !== choice.fullUrl && choice.fullUrl){ img.src = choice.fullUrl; }
+        };
+        img.src = choice.imageUrl;
+        img.decoding = 'async';
+        img.loading = 'eager';
+        img.alt = `Suzuki GSX — ${choice.title.replace(/^File:/,'')}`;
+
+        setHTML('caption', `Source : <a href="${choice.pageUrl}" target="_blank" rel="noopener">Wikimedia Commons</a> · <strong>${choice.title.replace(/^File:/,'')}</strong> ${choice.license?`· Licence : ${choice.license}`:''}`);
+      }catch(err){
+        console.error(err);
+        setText('caption','Erreur lors du chargement des images (environnement sans accès réseau ?).');
+        const wrap = document.getElementById('photoWrap');
+        const img = document.getElementById('photo');
+        if(img) img.remove();
+        const div = document.createElement('div');
+        div.className = 'placeholder';
+        div.innerHTML = '<strong>Repli</strong><br/>Impossible de charger des images distantes ici.';
+        wrap.appendChild(div);
+      }
+    }
+
+    // Lancement
+    init();
+  </script>
+</body>
+</html>
