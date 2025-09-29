@@ -135,6 +135,18 @@
       const hh = +parts.find(p=>p.type==='hour').value;
       return {y, m, d, hh};
     }
+    function effectiveParisDateParts(now = new Date()){
+      // renvoie la date de référence (veille avant 10:00 Paris)
+      let {y,m,d,hh} = parisParts(now);
+      if(hh < DAILY_HOUR_PARIS){
+        const dt = new Date(Date.UTC(y, m-1, d));
+        dt.setUTCDate(dt.getUTCDate() - 1);
+        const p = parisParts(dt);
+        y = p.y; m = p.m; d = p.d;
+      }
+      return {y,m,d};
+    }
+    function toISODate({y,m,d}){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
     function toISODate({y,m,d}){ return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}` }
     function daysSince(startISO, now = new Date()){
       // calcule en se basant sur la date "Paris" (ignore l'heure sauf pour le seuil 10h)
@@ -257,7 +269,8 @@
       try{
         const nowP = parisParts();
         setText('timeNote', `Paris ${String(nowP.hh).padStart(2,'0')}:00 · nouvelle photo à ${String(DAILY_HOUR_PARIS).padStart(2,'0')}:00`);
-        setText('badgeDay', `Photo du ${toISODate(nowP)}`);
+        const eff = effectiveParisDateParts();
+        setText('badgeDay', `Photo du ${toISODate(eff)}`);
 
         // Récupère des images depuis plusieurs catégories Commons (via JSONP)
         const lists = await Promise.all(CATEGORIES.map(fetchCommonsImagesForCategory));
@@ -280,7 +293,7 @@
         }
 
         const dayIndex = daysSince(START_DATE_ISO);
-        const todayParisISO = (()=>{ const p=parisParts(); return `${p.y}-${String(p.m).padStart(2,'0')}-${String(p.d).padStart(2,'0')}`; })();
+        const todayParisISO = (()=>{ const p=effectiveParisDateParts(); return `${p.y}-${String(p.m).padStart(2,'0')}-${String(p.d).padStart(2,'0')}`; })();
         // Choix déterministe basé sur min-hash (indépendant de l'ordre / presque indépendant des ajouts)
         const choice = pickByDateMinHash(images, todayParisISO) || pickDeterministic(images, dayIndex);
         if(!choice){ throw new Error('Pas de choix disponible'); }
